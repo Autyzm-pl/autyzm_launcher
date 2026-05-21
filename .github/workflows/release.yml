@@ -1,126 +1,128 @@
-name: Build Application and Make Release
+name: Release binaries
 
 on:
   push:
     tags:
-      - "*"
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build, e.g. v0.1.0. Empty = current ref"
+        required: false
+        type: string
 
 permissions: {}
 
 jobs:
   build_release:
-    name: Build Release
+    name: Build release binaries
     uses: ./.github/workflows/build.yml
     permissions:
       contents: read
-      # Required for Azure Trusted Signing
       id-token: write
-      # Required for vcpkg binary cache
       packages: write
     with:
       build-type: Release
-      environment: Release
     secrets: inherit
 
   create_release:
+    name: Create draft GitHub release
     needs: build_release
     permissions:
       contents: write
-    runs-on: ubuntu-slim
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v6
         with:
-          submodules: "true"
-          path: "FjordLauncher-source"
+          submodules: true
+          path: AutyzmLauncher-source
+
       - name: Download artifacts
         uses: actions/download-artifact@v8
-      - name: Grab and store version
+
+      - name: Determine version
+        shell: bash
         run: |
-          tag_name=$(echo ${{ github.ref }} | grep -oE "[^/]+$")
-          echo "VERSION=$tag_name" >> $GITHUB_ENV
-      - name: Package artifacts properly
+          if [ -n "${{ inputs.tag || '' }}" ]; then
+            VERSION="${{ inputs.tag }}"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME}"
+          else
+            VERSION="manual-${GITHUB_SHA::7}"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Normalize artifact names
+        shell: bash
         run: |
-          mv ${{ github.workspace }}/FjordLauncher-source FjordLauncher-${{ env.VERSION }}
-          mv FjordLauncher-Linux-Qt6-Portable*/FjordLauncher-portable.tar.gz FjordLauncher-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
-          mv FjordLauncher-Linux-aarch64-Qt6-Portable*/FjordLauncher-portable.tar.gz FjordLauncher-Linux-aarch64-Qt6-Portable-${{ env.VERSION }}.tar.gz
-          mv FjordLauncher-*.AppImage/FjordLauncher-*-x86_64.AppImage FjordLauncher-Linux-x86_64.AppImage
-          mv FjordLauncher-*.AppImage.zsync/FjordLauncher-*-x86_64.AppImage.zsync FjordLauncher-Linux-x86_64.AppImage.zsync
-          mv FjordLauncher-*.AppImage/FjordLauncher-*-aarch64.AppImage FjordLauncher-Linux-aarch64.AppImage
-          mv FjordLauncher-*.AppImage.zsync/FjordLauncher-*-aarch64.AppImage.zsync FjordLauncher-Linux-aarch64.AppImage.zsync
-          mv FjordLauncher-macOS*/FjordLauncher.zip FjordLauncher-macOS-${{ env.VERSION }}.zip
-          mv FjordLauncher-macOS*/FjordLauncher.dmg FjordLauncher-macOS-${{ env.VERSION }}.dmg
+          set -euo pipefail
+          shopt -s nullglob
 
-          tar --exclude='.git' -czf FjordLauncher-${{ env.VERSION }}.tar.gz FjordLauncher-${{ env.VERSION }}
+          mv "$GITHUB_WORKSPACE/AutyzmLauncher-source" "AutyzmLauncher-${VERSION}"
+          tar --exclude='.git' -czf "AutyzmLauncher-${VERSION}.tar.gz" "AutyzmLauncher-${VERSION}"
 
-          for d in FjordLauncher-Windows-MSVC*; do
-            cd "${d}" || continue
-            LEGACY="$(echo -n ${d} | grep -o Legacy || true)"
-            ARM64="$(echo -n ${d} | grep -o arm64 || true)"
-            INST="$(echo -n ${d} | grep -o Setup || true)"
-            PORT="$(echo -n ${d} | grep -o Portable || true)"
-            NAME="FjordLauncher-Windows-MSVC"
-            test -z "${LEGACY}" || NAME="${NAME}-Legacy"
-            test -z "${ARM64}" || NAME="${NAME}-arm64"
-            test -z "${PORT}" || NAME="${NAME}-Portable"
-            test -z "${INST}" || mv FjordLauncher-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
-            test -n "${INST}" || zip -r -9 "../${NAME}-${{ env.VERSION }}.zip" *
-            cd ..
+          # Linux x86_64 AppImage + zsync + portable tarball
+          appimages=(AutyzmLauncher-*.AppImage/AutyzmLauncher-*-x86_64.AppImage)
+          if [ ${#appimages[@]} -gt 0 ]; then
+            mv "${appimages[0]}" AutyzmLauncher-Linux-x86_64.AppImage
+          fi
+          zsyncs=(AutyzmLauncher-*.AppImage.zsync/AutyzmLauncher-*-x86_64.AppImage.zsync)
+          if [ ${#zsyncs[@]} -gt 0 ]; then
+            mv "${zsyncs[0]}" AutyzmLauncher-Linux-x86_64.AppImage.zsync
+          fi
+          linux_portable=(AutyzmLauncher-Linux-Qt6-Portable*/AutyzmLauncher-portable.tar.gz)
+          if [ ${#linux_portable[@]} -gt 0 ]; then
+            mv "${linux_portable[0]}" "AutyzmLauncher-Linux-Qt6-Portable-${VERSION}.tar.gz"
+          fi
+
+          # macOS universal ZIP + DMG
+          mac_zip=(AutyzmLauncher-macOS*/AutyzmLauncher.zip)
+          if [ ${#mac_zip[@]} -gt 0 ]; then
+            mv "${mac_zip[0]}" "AutyzmLauncher-macOS-${VERSION}.zip"
+          fi
+          mac_dmg=(AutyzmLauncher-macOS*.dmg/AutyzmLauncher.dmg AutyzmLauncher-macOS*/AutyzmLauncher.dmg)
+          if [ ${#mac_dmg[@]} -gt 0 ]; then
+            mv "${mac_dmg[0]}" "AutyzmLauncher-macOS-${VERSION}.dmg"
+          fi
+
+          # Windows MSVC install tree -> zip, portable tree -> zip, NSIS installer -> exe
+          for d in AutyzmLauncher-Windows-MSVC-*Release; do
+            [ -d "$d" ] || continue
+            case "$d" in
+              *-Setup-*)
+                exe=("$d"/AutyzmLauncher-Setup.exe)
+                [ -f "${exe[0]}" ] && mv "${exe[0]}" "AutyzmLauncher-Windows-MSVC-Setup-${VERSION}.exe"
+                ;;
+              *-Portable-*)
+                (cd "$d" && zip -r -9 "../AutyzmLauncher-Windows-MSVC-Portable-${VERSION}.zip" .)
+                ;;
+              *)
+                (cd "$d" && zip -r -9 "../AutyzmLauncher-Windows-MSVC-${VERSION}.zip" .)
+                ;;
+            esac
           done
 
-          for d in FjordLauncher-Windows-MinGW-w64*; do
-            cd "${d}" || continue
-            INST="$(echo -n ${d} | grep -o Setup || true)"
-            PORT="$(echo -n ${d} | grep -o Portable || true)"
-            NAME="FjordLauncher-Windows-MinGW-w64"
-            test -z "${PORT}" || NAME="${NAME}-Portable"
-            test -z "${INST}" || mv FjordLauncher-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
-            test -n "${INST}" || zip -r -9 "../${NAME}-${{ env.VERSION }}.zip" *
-            cd ..
-          done
+          echo "Prepared release files:"
+          ls -lh AutyzmLauncher-* || true
 
-          for d in FjordLauncher-Windows-MinGW-arm64*; do
-            cd "${d}" || continue
-            INST="$(echo -n ${d} | grep -o Setup || true)"
-            PORT="$(echo -n ${d} | grep -o Portable || true)"
-            NAME="FjordLauncher-Windows-MinGW-arm64"
-            test -z "${PORT}" || NAME="${NAME}-Portable"
-            test -z "${INST}" || mv FjordLauncher-*.exe ../${NAME}-Setup-${{ env.VERSION }}.exe
-            test -n "${INST}" || zip -r -9 "../${NAME}-${{ env.VERSION }}.zip" *
-            cd ..
-          done
-
-      - name: Create release
-        id: create_release
+      - name: Create draft release
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ github.ref }}
-          name: Fjord Launcher ${{ env.VERSION }}
+          tag_name: ${{ env.VERSION }}
+          name: Autyzm Launcher ${{ env.VERSION }}
           draft: true
-          prerelease: false
-          fail_on_unmatched_files: true
+          prerelease: ${{ contains(env.VERSION, 'alpha') || contains(env.VERSION, 'beta') || contains(env.VERSION, 'rc') }}
+          fail_on_unmatched_files: false
+          generate_release_notes: true
           files: |
-            FjordLauncher-Linux-x86_64.AppImage
-            FjordLauncher-Linux-x86_64.AppImage.zsync
-            FjordLauncher-Linux-aarch64.AppImage
-            FjordLauncher-Linux-aarch64.AppImage.zsync
-            FjordLauncher-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
-            FjordLauncher-Linux-aarch64-Qt6-Portable-${{ env.VERSION }}.tar.gz
-            FjordLauncher-Windows-MinGW-w64-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MinGW-w64-Portable-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MinGW-w64-Setup-${{ env.VERSION }}.exe
-            FjordLauncher-Windows-MinGW-arm64-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MinGW-arm64-Portable-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MinGW-arm64-Setup-${{ env.VERSION }}.exe
-            FjordLauncher-Windows-MSVC-arm64-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MSVC-arm64-Portable-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MSVC-arm64-Setup-${{ env.VERSION }}.exe
-            FjordLauncher-Windows-MSVC-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MSVC-Portable-${{ env.VERSION }}.zip
-            FjordLauncher-Windows-MSVC-Setup-${{ env.VERSION }}.exe
-            FjordLauncher-macOS-${{ env.VERSION }}.zip
-            FjordLauncher-macOS-${{ env.VERSION }}.dmg
-            FjordLauncher-${{ env.VERSION }}.tar.gz
+            AutyzmLauncher-Linux-x86_64.AppImage
+            AutyzmLauncher-Linux-x86_64.AppImage.zsync
+            AutyzmLauncher-Linux-Qt6-Portable-${{ env.VERSION }}.tar.gz
+            AutyzmLauncher-Windows-MSVC-${{ env.VERSION }}.zip
+            AutyzmLauncher-Windows-MSVC-Portable-${{ env.VERSION }}.zip
+            AutyzmLauncher-Windows-MSVC-Setup-${{ env.VERSION }}.exe
+            AutyzmLauncher-macOS-${{ env.VERSION }}.zip
+            AutyzmLauncher-macOS-${{ env.VERSION }}.dmg
+            AutyzmLauncher-${{ env.VERSION }}.tar.gz

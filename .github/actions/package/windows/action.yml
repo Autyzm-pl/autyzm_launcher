@@ -1,5 +1,5 @@
 name: Package for Windows
-description: Create a Windows package for Fjord Launcher
+description: Create a Windows package for Autyzm Launcher
 
 inputs:
   version:
@@ -73,7 +73,7 @@ runs:
       with:
         endpoint: https://eus.codesigning.azure.net/
         trusted-signing-account-name: unmojang
-        certificate-profile-name: FjordLauncher
+        certificate-profile-name: AutyzmLauncher
         files-folder: ${{ github.workspace }}\install\
         files-folder-filter: dll,exe
         files-folder-recurse: true
@@ -145,11 +145,11 @@ runs:
       uses: azure/artifact-signing-action@v1
       with:
         endpoint: https://eus.codesigning.azure.net/
-        trusted-signing-account-name: FjordLauncher
-        certificate-profile-name: FjordLauncher
+        trusted-signing-account-name: AutyzmLauncher
+        certificate-profile-name: AutyzmLauncher
 
         files: |
-          ${{ github.workspace }}\FjordLauncher-Setup.exe
+          ${{ github.workspace }}\AutyzmLauncher-Setup.exe
 
         # recommended in https://github.com/Azure/artifact-signing-action#timestamping-1
         timestamp-rfc3161: 'http://timestamp.acs.microsoft.com'
@@ -170,17 +170,17 @@ runs:
     - name: Upload binary zip
       uses: actions/upload-artifact@v7
       with:
-        name: FjordLauncher-${{ inputs.artifact-name }}-${{ inputs.version }}-${{ inputs.build-type }}
+        name: AutyzmLauncher-${{ inputs.artifact-name }}-${{ inputs.version }}-${{ inputs.build-type }}
         path: install/**
 
     - name: Upload portable zip
       uses: actions/upload-artifact@v7
       with:
-        name: FjordLauncher-${{ inputs.artifact-name }}-Portable-${{ inputs.version }}-${{ inputs.build-type }}
+        name: AutyzmLauncher-${{ inputs.artifact-name }}-Portable-${{ inputs.version }}-${{ inputs.build-type }}
         path: install-portable/**
 
     - name: Upload installer
       uses: actions/upload-artifact@v7
       with:
-        name: FjordLauncher-${{ inputs.artifact-name }}-Setup-${{ inputs.version }}-${{ inputs.build-type }}
-        path: FjordLauncher-Setup.exe
+        name: AutyzmLauncher-${{ inputs.artifact-name }}-Setup-${{ inputs.version }}-${{ inputs.build-type }}
+        path: AutyzmLauncher-Setup.exe
