@@ -97,20 +97,19 @@ void LaunchController::decideAccount()
     }
 
     if (!accounts->anyAccountIsValid()) {
-        // Tell the user they need to log in at least one account in order to play.
-        auto reply = CustomMessageBox::selectable(m_parentWidget, tr("No Accounts"),
-                                                  tr("In order to play Minecraft, you must have at least one Microsoft "
-                                                     "account which owns Minecraft logged in. "
-                                                     "Would you like to open the account manager to add an account now?"),
-                                                  QMessageBox::Information, QMessageBox::Yes | QMessageBox::No)
-                         ->exec();
-
-        if (reply == QMessageBox::Yes) {
-            // Open the account manager.
-            APPLICATION->ShowGlobalSettings(m_parentWidget, "accounts");
-        } else if (reply == QMessageBox::No) {
-            // Do not open "profile select" dialog.
+        // Autyzm Launcher: first launch should be one-click for non-premium users.
+        // If there is no account at all, ask for an offline nickname and create
+        // an offline account immediately instead of forcing Microsoft auth.
+        ChooseOfflineNameDialog dialog(tr("Please enter your desired username to play offline."), m_parentWidget);
+        if (dialog.exec() != QDialog::Accepted) {
             return;
+        }
+
+        if (const MinecraftAccountPtr account = MinecraftAccount::createOffline(dialog.getUsername())) {
+            account->login()->start();
+            accounts->addAccount(account);
+            accounts->setDefaultAccount(account);
+            m_accountToUse = account;
         }
     }
 
@@ -163,7 +162,13 @@ LaunchDecision LaunchController::decideLaunchMode()
     }
 
     if (!accountToCheck) {
-        m_actualLaunchMode = LaunchMode::Demo;
+        // Autyzm Launcher: offline accounts are first-class. Launch them in
+        // offline mode instead of falling back to the Mojang demo.
+        if (m_accountToUse && m_accountToUse->accountType() == AccountType::Offline) {
+            m_actualLaunchMode = LaunchMode::Offline;
+        } else {
+            m_actualLaunchMode = LaunchMode::Demo;
+        }
         return LaunchDecision::Continue;
     }
 
