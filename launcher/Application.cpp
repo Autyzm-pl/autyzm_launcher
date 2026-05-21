@@ -41,6 +41,7 @@
  */
 
 #include "Application.h"
+#include "AutyzmBootstrap.h"
 #include "BuildConfig.h"
 
 #include "DataMigrationTask.h"
@@ -954,7 +955,14 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     {
         m_translations.reset(new TranslationsModel("translations"));
         auto bcp47Name = m_settings->get("Language").toString();
-        m_translations->selectLanguage(bcp47Name);
+        if (bcp47Name.isEmpty()) {
+            // Autyzm Launcher: no first-run language wizard. Pick from the OS
+            // locale automatically; TranslationsModel falls back to English if
+            // there is no matching translation yet.
+            m_translations->downloadIndex();
+        } else {
+            m_translations->selectLanguage(bcp47Name);
+        }
         qInfo() << "Your language is" << bcp47Name;
         qInfo() << "<> Translations loaded.";
     }
@@ -1002,6 +1010,7 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
         connect(InstDirSetting.get(), &Setting::SettingChanged, m_instances.get(), &InstanceList::on_InstFolderChanged);
         qInfo() << "Loading Instances...";
         m_instances->loadList();
+        AutyzmBootstrap::ensureDefaultInstance();
         qInfo() << "<> Instances loaded.";
     }
 
@@ -1221,6 +1230,8 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
 
 bool Application::createSetupWizard()
 {
+    AutyzmBootstrap::applyFirstRunDefaults();
+
     bool javaRequired = [this]() {
         if (BuildConfig.JAVA_DOWNLOADER_ENABLED && settings()->get("AutomaticJavaDownload").toBool()) {
             return false;
@@ -1241,13 +1252,14 @@ bool Application::createSetupWizard()
     }();
     bool askjava = BuildConfig.JAVA_DOWNLOADER_ENABLED && !javaRequired && !settings()->get("AutomaticJavaDownload").toBool() &&
                    !settings()->get("AutomaticJavaSwitch").toBool() && !settings()->get("UserAskedAboutAutomaticJavaDownload").toBool();
-    bool languageRequired = settings()->get("Language").toString().isEmpty();
-    bool pasteInterventionRequired = settings()->get("PastebinURL") != "";
+    // Autyzm Launcher: locale/theme/java/paste defaults are applied automatically.
+    bool languageRequired = false;
+    bool pasteInterventionRequired = false;
     bool validWidgets = m_themeManager->isValidApplicationTheme(settings()->get("ApplicationTheme").toString());
     bool validIcons = m_themeManager->isValidIconTheme(settings()->get("IconTheme").toString());
     // Autyzm Launcher: do not force first-run Microsoft login.
     bool login = false;
-    bool themeInterventionRequired = !validWidgets || !validIcons;
+    bool themeInterventionRequired = false;
     bool wizardRequired = javaRequired || languageRequired || pasteInterventionRequired || themeInterventionRequired || askjava || login;
     if (wizardRequired) {
         // set default theme after going into theme wizard
@@ -1388,29 +1400,10 @@ void Application::performMainStartupAction()
         }
     }
     {
-        bool shouldFetch = m_settings->get("FlameKeyShouldBeFetchedOnStartup").toBool();
-        if (shouldFetch && !(capabilities() & Capability::SupportsFlame)) {
-            QMessageBox msgBox{ m_mainWindow };
-            msgBox.setWindowTitle(tr("Fetch CurseForge Core API key?"));
-            msgBox.setText(tr("Would you like to fetch the official CurseForge app's API key now?"));
-            msgBox.setInformativeText(
-                tr("Using the official CurseForge app's API key may break CurseForge's terms of service but should allow Fjord Launcher "
-                   "to download all mods in a modpack without you needing to download any of them manually."));
-            msgBox.setStandardButtons(QMessageBox::No | QMessageBox::Yes);
-            msgBox.setDefaultButton(QMessageBox::Yes);
-            msgBox.setModal(true);
-
-            const auto& result = msgBox.exec();
-
-            if (result == QMessageBox::Yes) {
-                const auto& apiKey = GuiUtil::fetchFlameKey();
-                if (!apiKey.isEmpty()) {
-                    m_settings->set("FlameKeyOverride", apiKey);
-                    updateCapabilities();
-                }
-            }
-            m_settings->set("FlameKeyShouldBeFetchedOnStartup", false);
-        }
+        // Autyzm Launcher: never block startup with CurseForge API key prompts.
+        // Our default distribution path is the bundled/default Autyzm instance,
+        // not interactive CurseForge imports.
+        m_settings->set("FlameKeyShouldBeFetchedOnStartup", false);
     }
     if (!m_mainWindow) {
         // normal main window

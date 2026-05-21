@@ -813,6 +813,8 @@ SET(LAUNCHER_SOURCES
     # Application base
     Application.h
     Application.cpp
+    AutyzmBootstrap.h
+    AutyzmBootstrap.cpp
     DataMigrationTask.h
     DataMigrationTask.cpp
     ApplicationMessage.h
