@@ -22,11 +22,11 @@
 #include <QUrl>
 
 namespace {
-constexpr auto kInstanceId = "Autyzm";
-constexpr auto kInstanceName = "Autyzm.pl";
+constexpr auto kInstanceId = "pullappMC";
+constexpr auto kInstanceName = "pullappMC";
 constexpr auto kMinecraftVersion = "1.21.1";
 constexpr auto kNeoForgeVersion = "21.1.229";
-constexpr auto kServerName = "Autyzm.pl";
+constexpr auto kServerName = "pullappMC";
 constexpr auto kServerAddress = "minecraft.pullapp.xyz";
 
 // Packwiz pack URL - mods are synced automatically on each launch
