@@ -1222,13 +1222,22 @@ LaunchTask* MinecraftInstance::createLaunchTask(AuthSessionPtr session, Minecraf
         process->appendStep(step);
     }
 
-    // if we aren't in offline mode
+    // Autyzm Launcher: "Offline" here means "no premium account", NOT "no
+    // internet". Upstream skipped the entire update task in offline mode, which
+    // meant a fresh non-premium player launched a half-empty instance with no
+    // libraries/assets/client jar and the game simply refused to start. We
+    // always run the update task; we only skip ClaimAccount (which requires a
+    // valid Mojang session) when running offline.
     if (session->launchMode != LaunchMode::Offline) {
         process->appendStep(makeShared<ClaimAccount>(pptr, session));
-        for (auto t : createUpdateTask()) {
-            process->appendStep(makeShared<TaskStepWrapper>(pptr, t));
-        }
-    } else {
+    }
+    for (auto t : createUpdateTask()) {
+        process->appendStep(makeShared<TaskStepWrapper>(pptr, t));
+    }
+    if (session->launchMode == LaunchMode::Offline) {
+        // Belt-and-suspenders: if the update task could not reach the network,
+        // make sure whatever we already have on disk is at least self-consistent
+        // so the launch fails with a useful error instead of silently.
         process->appendStep(makeShared<EnsureOfflineLibraries>(pptr, this));
     }
 
