@@ -34,7 +34,6 @@ constexpr auto kPackwizPackUrl = "https://minecraft.pullapp.xyz/pack/pack.toml";
 
 // Packwiz installer bootstrap - small JAR that downloads and runs the actual installer
 constexpr auto kPackwizBootstrapUrl = "https://github.com/packwiz/packwiz-installer-bootstrap/releases/download/v0.0.3/packwiz-installer-bootstrap.jar";
-constexpr auto kPackwizBootstrapSha256 = "f2649c5e9b0dfb59fad0c8c4cd2c1f7e30c57b5e1b63f4cadd4c24c99a3b5f20";
 
 bool writeTextFile(const QString& path, const QString& content)
 {
