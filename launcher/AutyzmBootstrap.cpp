@@ -29,8 +29,8 @@ constexpr auto kMinecraftVersion = "1.21.1";
 constexpr auto kNeoForgeVersion = "21.1.229";
 constexpr auto kServerName = "Autyzm.pl";
 constexpr auto kServerAddress = "minecraft.pullapp.xyz";
-constexpr auto kClientPackUrl = "https://github.com/Autyzm-pl/autyzm_launcher/releases/download/v0.1.0-alpha.5/autyzm-client-pack.zip";
-constexpr auto kClientPackSha256 = "806237b55a1917c1df8697f0e2f589ab801d62faab01d65ff43ddbaadb1cfde4";
+constexpr auto kClientPackUrl = "https://github.com/Autyzm-pl/autyzm_launcher/releases/download/v0.1.0-alpha.7/autyzm-client-pack.zip";
+constexpr auto kClientPackSha256 = "c42c4bda0a3ff1f9131c7f3fdf60b91e2aa425ec4580bce0709ab2a1ba06f08b";
 
 bool writeTextFileIfMissing(const QString& path, const QString& content)
 {
