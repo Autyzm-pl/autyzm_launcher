@@ -952,15 +952,19 @@ Application::Application(int& argc, char** argv) : QApplication(argc, argv)
     }
 
     // load translations
+    // NOTE: do NOT call TranslationsModel::downloadIndex() or selectLanguage() on a
+    // missing language here -- both reach into APPLICATION->metacache(), which is
+    // initialised further down. Calling them now dereferences a null unique_ptr
+    // and the launcher crashes with 0xC0000005 on Windows the first time it runs
+    // (when the Language setting is still empty). The actual download is kicked
+    // off later, after the metacache block, at line 1050.
     {
         m_translations.reset(new TranslationsModel("translations"));
         auto bcp47Name = m_settings->get("Language").toString();
-        if (bcp47Name.isEmpty()) {
-            // Autyzm Launcher: no first-run language wizard. Pick from the OS
-            // locale automatically; TranslationsModel falls back to English if
-            // there is no matching translation yet.
-            m_translations->downloadIndex();
-        } else {
+        if (!bcp47Name.isEmpty()) {
+            // Safe: selectLanguage on a known language only touches in-memory
+            // state until updateLanguage() actually needs the metacache, which
+            // happens after this initialisation phase.
             m_translations->selectLanguage(bcp47Name);
         }
         qInfo() << "Your language is" << bcp47Name;
