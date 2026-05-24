@@ -1202,9 +1202,12 @@ LaunchTask* MinecraftInstance::createLaunchTask(AuthSessionPtr session, Minecraf
     }
 
     // load meta
+    // Autyzm Launcher: always load metadata online. In our context "Offline" launch
+    // mode means "no premium account", not "no internet". If we pass Net::Mode::Offline
+    // here, the meta system only reads from cache, which on a fresh install is empty —
+    // resulting in an incomplete library list (no LWJGL) and a crash on first launch.
     {
-        auto mode = session->launchMode != LaunchMode::Offline ? Net::Mode::Online : Net::Mode::Offline;
-        process->appendStep(makeShared<TaskStepWrapper>(pptr, makeShared<MinecraftLoadAndCheck>(this, mode)));
+        process->appendStep(makeShared<TaskStepWrapper>(pptr, makeShared<MinecraftLoadAndCheck>(this, Net::Mode::Online)));
     }
 
     // check java
