@@ -5,7 +5,6 @@
 #include "Application.h"
 #include "BuildConfig.h"
 #include "InstanceList.h"
-#include "MMCZip.h"
 #include "settings/INISettingsObject.h"
 #include "ui/themes/ThemeManager.h"
 
@@ -29,15 +28,16 @@ constexpr auto kMinecraftVersion = "1.21.1";
 constexpr auto kNeoForgeVersion = "21.1.229";
 constexpr auto kServerName = "Autyzm.pl";
 constexpr auto kServerAddress = "minecraft.pullapp.xyz";
-constexpr auto kClientPackUrl = "https://github.com/Autyzm-pl/autyzm_launcher/releases/download/v0.1.0-alpha.7/autyzm-client-pack.zip";
-constexpr auto kClientPackSha256 = "c42c4bda0a3ff1f9131c7f3fdf60b91e2aa425ec4580bce0709ab2a1ba06f08b";
 
-bool writeTextFileIfMissing(const QString& path, const QString& content)
+// Packwiz pack URL - mods are synced automatically on each launch
+constexpr auto kPackwizPackUrl = "https://minecraft.pullapp.xyz/pack/pack.toml";
+
+// Packwiz installer bootstrap - small JAR that downloads and runs the actual installer
+constexpr auto kPackwizBootstrapUrl = "https://github.com/packwiz/packwiz-installer-bootstrap/releases/download/v0.0.3/packwiz-installer-bootstrap.jar";
+constexpr auto kPackwizBootstrapSha256 = "f2649c5e9b0dfb59fad0c8c4cd2c1f7e30c57b5e1b63f4cadd4c24c99a3b5f20";
+
+bool writeTextFile(const QString& path, const QString& content)
 {
-    if (QFileInfo::exists(path)) {
-        return true;
-    }
-
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
         qWarning() << "Autyzm bootstrap: cannot write" << path << file.errorString();
@@ -51,6 +51,14 @@ bool writeTextFileIfMissing(const QString& path, const QString& content)
         return false;
     }
     return true;
+}
+
+bool writeTextFileIfMissing(const QString& path, const QString& content)
+{
+    if (QFileInfo::exists(path)) {
+        return true;
+    }
+    return writeTextFile(path, content);
 }
 
 bool writeBinaryFileIfMissing(const QString& path, const QByteArray& content)
@@ -117,84 +125,45 @@ QByteArray makeServersDat()
     return nbt;
 }
 
-QString clientPackMarkerPath(const QString& instanceRoot)
+void downloadPackwizBootstrap(const QString& minecraftDir)
 {
-    return FS::PathCombine(instanceRoot, QStringLiteral(".autyzm-client-pack-%1.txt").arg(QString::fromLatin1(kClientPackSha256)));
-}
-
-void installClientPackFromZip(const QString& instanceRoot, const QString& zipPath)
-{
-    const QString marker = clientPackMarkerPath(instanceRoot);
-    if (QFileInfo::exists(marker)) {
-        qInfo() << "Autyzm bootstrap: client pack already installed";
+    const QString jarPath = FS::PathCombine(minecraftDir, "packwiz-installer-bootstrap.jar");
+    
+    if (QFileInfo::exists(jarPath)) {
+        qInfo() << "Autyzm bootstrap: packwiz-installer-bootstrap.jar already exists";
         return;
     }
 
-    const QByteArray expectedSha = QByteArray(kClientPackSha256);
-    QFile zip(zipPath);
-    if (!zip.open(QIODevice::ReadOnly)) {
-        qWarning() << "Autyzm bootstrap: cannot open client pack" << zipPath << zip.errorString();
-        return;
-    }
-    const QByteArray actualSha = QCryptographicHash::hash(zip.readAll(), QCryptographicHash::Sha256).toHex();
-    if (actualSha != expectedSha) {
-        qWarning() << "Autyzm bootstrap: client pack checksum mismatch" << actualSha << "expected" << expectedSha;
-        return;
-    }
-
-    const QString minecraftDir = FS::PathCombine(instanceRoot, ".minecraft");
-    qInfo() << "Autyzm bootstrap: extracting client pack" << zipPath << "to" << minecraftDir;
-    const auto extracted = MMCZip::extractDir(zipPath, minecraftDir);
-    if (!extracted.has_value()) {
-        qWarning() << "Autyzm bootstrap: failed to extract client pack" << zipPath;
-        return;
-    }
-
-    writeTextFileIfMissing(
-        marker, QStringLiteral("sha256=%1\nurl=%2\n").arg(QString::fromLatin1(kClientPackSha256), QString::fromLatin1(kClientPackUrl)));
-    if (APPLICATION->instances()) {
-        APPLICATION->instances()->loadList();
-    }
-}
-
-void downloadAndInstallClientPack(const QString& instanceRoot)
-{
     if (!APPLICATION->network()) {
-        qWarning() << "Autyzm bootstrap: network manager is not ready; cannot download client pack";
+        qWarning() << "Autyzm bootstrap: network manager is not ready; cannot download packwiz bootstrap";
         return;
     }
 
-    const QString cacheDir = FS::PathCombine(APPLICATION->root(), "cache");
-    FS::ensureFolderPathExists(cacheDir);
-    const QString zipPath =
-        FS::PathCombine(cacheDir, QStringLiteral("autyzm-client-pack-%1.zip").arg(QString::fromLatin1(kClientPackSha256)));
-
-    if (QFileInfo::exists(zipPath)) {
-        installClientPackFromZip(instanceRoot, zipPath);
-        return;
-    }
-
-    qInfo() << "Autyzm bootstrap: downloading client pack" << kClientPackUrl;
-    auto* reply = APPLICATION->network()->get(QNetworkRequest(QUrl(QString::fromLatin1(kClientPackUrl))));
-    QObject::connect(reply, &QNetworkReply::finished, [reply, zipPath, instanceRoot]() {
+    qInfo() << "Autyzm bootstrap: downloading packwiz-installer-bootstrap.jar";
+    auto* reply = APPLICATION->network()->get(QNetworkRequest(QUrl(QString::fromLatin1(kPackwizBootstrapUrl))));
+    QObject::connect(reply, &QNetworkReply::finished, [reply, jarPath]() {
         reply->deleteLater();
         if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "Autyzm bootstrap: client pack download failed" << reply->errorString();
+            qWarning() << "Autyzm bootstrap: packwiz bootstrap download failed" << reply->errorString();
             return;
         }
-        QSaveFile out(zipPath);
+        
+        const QByteArray data = reply->readAll();
+        
+        QSaveFile out(jarPath);
         if (!out.open(QIODevice::WriteOnly)) {
-            qWarning() << "Autyzm bootstrap: cannot save client pack" << zipPath << out.errorString();
+            qWarning() << "Autyzm bootstrap: cannot save packwiz bootstrap" << jarPath << out.errorString();
             return;
         }
-        out.write(reply->readAll());
+        out.write(data);
         if (!out.commit()) {
-            qWarning() << "Autyzm bootstrap: cannot commit client pack" << zipPath << out.errorString();
+            qWarning() << "Autyzm bootstrap: cannot commit packwiz bootstrap" << jarPath << out.errorString();
             return;
         }
-        installClientPackFromZip(instanceRoot, zipPath);
+        qInfo() << "Autyzm bootstrap: packwiz-installer-bootstrap.jar downloaded successfully";
     });
 }
+
 }  // namespace
 
 namespace AutyzmBootstrap {
@@ -239,23 +208,34 @@ void ensureDefaultInstance()
         return;
     }
 
+    // Create mods folder for packwiz
+    FS::ensureFolderPathExists(FS::PathCombine(minecraftDir, "mods"));
+
     const bool existed = QFileInfo::exists(FS::PathCombine(instanceRoot, "instance.cfg"));
     if (!existed) {
         qInfo() << "Autyzm bootstrap: creating default instance at" << instanceRoot;
     }
 
-    if (!writeTextFileIfMissing(FS::PathCombine(instanceRoot, "instance.cfg"), QStringLiteral("ConfigVersion=1.3\n"
-                                                                                              "InstanceType=OneSix\n"
-                                                                                              "name=%1\n"
-                                                                                              "iconKey=grass\n"
-                                                                                              "ManagedPack=false\n"
-                                                                                              "OverrideJava=true\n"
-                                                                                              "OverrideMemory=true\n"
-                                                                                              "MinMemAlloc=1024\n"
-                                                                                              "MaxMemAlloc=8192\n")
-                                                                                   .arg(QString::fromLatin1(kInstanceName)))) {
-        return;
-    }
+    // Pre-launch command runs packwiz-installer-bootstrap which syncs mods from the server.
+    // -g = no GUI, -s client = client-side only mods, URL = pack.toml location
+    // $INST_JAVA is expanded by the launcher to the Java executable path.
+    const QString preLaunchCommand = QStringLiteral("\"$INST_JAVA\" -jar packwiz-installer-bootstrap.jar -g -s client %1")
+                                         .arg(QString::fromLatin1(kPackwizPackUrl));
+
+    // Always write instance.cfg to ensure PreLaunchCommand is set (even on existing instances)
+    writeTextFile(FS::PathCombine(instanceRoot, "instance.cfg"),
+                  QStringLiteral("ConfigVersion=1.3\n"
+                                 "InstanceType=OneSix\n"
+                                 "name=%1\n"
+                                 "iconKey=grass\n"
+                                 "ManagedPack=false\n"
+                                 "OverrideCommands=true\n"
+                                 "PreLaunchCommand=%2\n"
+                                 "OverrideJava=true\n"
+                                 "OverrideMemory=true\n"
+                                 "MinMemAlloc=1024\n"
+                                 "MaxMemAlloc=8192\n")
+                      .arg(QString::fromLatin1(kInstanceName), preLaunchCommand));
 
     writeTextFileIfMissing(FS::PathCombine(instanceRoot, "mmc-pack.json"),
                            QStringLiteral("{\n"
@@ -291,20 +271,26 @@ void ensureDefaultInstance()
     writeBinaryFileIfMissing(FS::PathCombine(minecraftDir, "servers.dat"), makeServersDat());
 
     writeTextFileIfMissing(FS::PathCombine(instanceRoot, "README-AUTYZM.txt"),
-                           QStringLiteral("Autyzm.pl default modpack instance.\n"
+                           QStringLiteral("Autyzm.pl modpack instance.\n"
                                           "Minecraft: %1\n"
                                           "NeoForge: %2\n"
                                           "Server: %3\n"
-                                          "Client pack: %4\n")
+                                          "\n"
+                                          "Mods are automatically synced from:\n"
+                                          "%4\n"
+                                          "\n"
+                                          "On each launch, packwiz-installer checks for mod updates\n"
+                                          "and downloads any new or changed mods automatically.\n")
                                .arg(QString::fromLatin1(kMinecraftVersion), QString::fromLatin1(kNeoForgeVersion),
-                                    QString::fromLatin1(kServerAddress), QString::fromLatin1(kClientPackUrl)));
+                                    QString::fromLatin1(kServerAddress), QString::fromLatin1(kPackwizPackUrl)));
 
     if (APPLICATION->instances()) {
         APPLICATION->instances()->loadList();
         APPLICATION->instances()->setInstanceGroup(QString::fromLatin1(kInstanceId), QStringLiteral("Autyzm.pl"));
     }
 
-    downloadAndInstallClientPack(instanceRoot);
+    // Download packwiz-installer-bootstrap.jar to .minecraft/
+    downloadPackwizBootstrap(minecraftDir);
 }
 
 }  // namespace AutyzmBootstrap
