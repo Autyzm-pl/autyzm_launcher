@@ -29,8 +29,7 @@ constexpr auto kMinecraftVersion = "1.21.1";
 constexpr auto kNeoForgeVersion = "21.1.229";
 constexpr auto kServerName = "Autyzm.pl";
 constexpr auto kServerAddress = "minecraft.pullapp.xyz";
-constexpr auto kClientPackUrl =
-    "https://github.com/Autyzm-pl/autyzm_launcher/releases/download/v0.1.0-alpha.5/autyzm-client-pack.zip";
+constexpr auto kClientPackUrl = "https://github.com/Autyzm-pl/autyzm_launcher/releases/download/v0.1.0-alpha.5/autyzm-client-pack.zip";
 constexpr auto kClientPackSha256 = "806237b55a1917c1df8697f0e2f589ab801d62faab01d65ff43ddbaadb1cfde4";
 
 bool writeTextFileIfMissing(const QString& path, const QString& content)
@@ -105,16 +104,16 @@ QByteArray makeServersDat()
     writeUtf(nbt, QString());  // root name
     nbt.append(char(9));       // TAG_List
     writeUtf(nbt, QStringLiteral("servers"));
-    nbt.append(char(10));      // list element type: TAG_Compound
-    writeInt(nbt, 1);          // one server
-    nbt.append(char(8));       // TAG_String
+    nbt.append(char(10));  // list element type: TAG_Compound
+    writeInt(nbt, 1);      // one server
+    nbt.append(char(8));   // TAG_String
     writeUtf(nbt, QStringLiteral("name"));
     writeUtf(nbt, QString::fromLatin1(kServerName));
-    nbt.append(char(8));       // TAG_String
+    nbt.append(char(8));  // TAG_String
     writeUtf(nbt, QStringLiteral("ip"));
     writeUtf(nbt, QString::fromLatin1(kServerAddress));
-    nbt.append(char(0));       // TAG_End for server compound
-    nbt.append(char(0));       // TAG_End for root compound
+    nbt.append(char(0));  // TAG_End for server compound
+    nbt.append(char(0));  // TAG_End for root compound
     return nbt;
 }
 
@@ -151,7 +150,8 @@ void installClientPackFromZip(const QString& instanceRoot, const QString& zipPat
         return;
     }
 
-    writeTextFileIfMissing(marker, QStringLiteral("sha256=%1\nurl=%2\n").arg(QString::fromLatin1(kClientPackSha256), QString::fromLatin1(kClientPackUrl)));
+    writeTextFileIfMissing(
+        marker, QStringLiteral("sha256=%1\nurl=%2\n").arg(QString::fromLatin1(kClientPackSha256), QString::fromLatin1(kClientPackUrl)));
     if (APPLICATION->instances()) {
         APPLICATION->instances()->loadList();
     }
@@ -166,7 +166,8 @@ void downloadAndInstallClientPack(const QString& instanceRoot)
 
     const QString cacheDir = FS::PathCombine(APPLICATION->root(), "cache");
     FS::ensureFolderPathExists(cacheDir);
-    const QString zipPath = FS::PathCombine(cacheDir, QStringLiteral("autyzm-client-pack-%1.zip").arg(QString::fromLatin1(kClientPackSha256)));
+    const QString zipPath =
+        FS::PathCombine(cacheDir, QStringLiteral("autyzm-client-pack-%1.zip").arg(QString::fromLatin1(kClientPackSha256)));
 
     if (QFileInfo::exists(zipPath)) {
         installClientPackFromZip(instanceRoot, zipPath);
@@ -194,7 +195,7 @@ void downloadAndInstallClientPack(const QString& instanceRoot)
         installClientPackFromZip(instanceRoot, zipPath);
     });
 }
-}
+}  // namespace
 
 namespace AutyzmBootstrap {
 
@@ -243,64 +244,60 @@ void ensureDefaultInstance()
         qInfo() << "Autyzm bootstrap: creating default instance at" << instanceRoot;
     }
 
-    if (!writeTextFileIfMissing(
-            FS::PathCombine(instanceRoot, "instance.cfg"),
-            QStringLiteral("ConfigVersion=1.3\n"
-                           "InstanceType=OneSix\n"
-                           "name=%1\n"
-                           "iconKey=grass\n"
-                           "ManagedPack=false\n"
-                           "OverrideJava=true\n"
-                           "OverrideMemory=true\n"
-                           "MinMemAlloc=1024\n"
-                           "MaxMemAlloc=8192\n")
-                .arg(QString::fromLatin1(kInstanceName)))) {
+    if (!writeTextFileIfMissing(FS::PathCombine(instanceRoot, "instance.cfg"), QStringLiteral("ConfigVersion=1.3\n"
+                                                                                              "InstanceType=OneSix\n"
+                                                                                              "name=%1\n"
+                                                                                              "iconKey=grass\n"
+                                                                                              "ManagedPack=false\n"
+                                                                                              "OverrideJava=true\n"
+                                                                                              "OverrideMemory=true\n"
+                                                                                              "MinMemAlloc=1024\n"
+                                                                                              "MaxMemAlloc=8192\n")
+                                                                                   .arg(QString::fromLatin1(kInstanceName)))) {
         return;
     }
 
-    writeTextFileIfMissing(
-        FS::PathCombine(instanceRoot, "mmc-pack.json"),
-        QStringLiteral("{\n"
-                       "    \"components\": [\n"
-                       "        {\n"
-                       "            \"cachedName\": \"Minecraft\",\n"
-                       "            \"cachedRequires\": [\n"
-                       "                {\n"
-                       "                    \"suggests\": \"21\",\n"
-                       "                    \"uid\": \"net.minecraft.java\"\n"
-                       "                }\n"
-                       "            ],\n"
-                       "            \"important\": true,\n"
-                       "            \"uid\": \"net.minecraft\",\n"
-                       "            \"version\": \"%1\"\n"
-                       "        },\n"
-                       "        {\n"
-                       "            \"cachedName\": \"NeoForge\",\n"
-                       "            \"cachedRequires\": [\n"
-                       "                {\n"
-                       "                    \"equals\": \"%1\",\n"
-                       "                    \"uid\": \"net.minecraft\"\n"
-                       "                }\n"
-                       "            ],\n"
-                       "            \"uid\": \"net.neoforged\",\n"
-                       "            \"version\": \"%2\"\n"
-                       "        }\n"
-                       "    ],\n"
-                       "    \"formatVersion\": 1\n"
-                       "}\n")
-            .arg(QString::fromLatin1(kMinecraftVersion), QString::fromLatin1(kNeoForgeVersion)));
+    writeTextFileIfMissing(FS::PathCombine(instanceRoot, "mmc-pack.json"),
+                           QStringLiteral("{\n"
+                                          "    \"components\": [\n"
+                                          "        {\n"
+                                          "            \"cachedName\": \"Minecraft\",\n"
+                                          "            \"cachedRequires\": [\n"
+                                          "                {\n"
+                                          "                    \"suggests\": \"21\",\n"
+                                          "                    \"uid\": \"net.minecraft.java\"\n"
+                                          "                }\n"
+                                          "            ],\n"
+                                          "            \"important\": true,\n"
+                                          "            \"uid\": \"net.minecraft\",\n"
+                                          "            \"version\": \"%1\"\n"
+                                          "        },\n"
+                                          "        {\n"
+                                          "            \"cachedName\": \"NeoForge\",\n"
+                                          "            \"cachedRequires\": [\n"
+                                          "                {\n"
+                                          "                    \"equals\": \"%1\",\n"
+                                          "                    \"uid\": \"net.minecraft\"\n"
+                                          "                }\n"
+                                          "            ],\n"
+                                          "            \"uid\": \"net.neoforged\",\n"
+                                          "            \"version\": \"%2\"\n"
+                                          "        }\n"
+                                          "    ],\n"
+                                          "    \"formatVersion\": 1\n"
+                                          "}\n")
+                               .arg(QString::fromLatin1(kMinecraftVersion), QString::fromLatin1(kNeoForgeVersion)));
 
     writeBinaryFileIfMissing(FS::PathCombine(minecraftDir, "servers.dat"), makeServersDat());
 
-    writeTextFileIfMissing(
-        FS::PathCombine(instanceRoot, "README-AUTYZM.txt"),
-        QStringLiteral("Autyzm.pl default modpack instance.\n"
-                       "Minecraft: %1\n"
-                       "NeoForge: %2\n"
-                       "Server: %3\n"
-                       "Client pack: %4\n")
-            .arg(QString::fromLatin1(kMinecraftVersion), QString::fromLatin1(kNeoForgeVersion), QString::fromLatin1(kServerAddress),
-                 QString::fromLatin1(kClientPackUrl)));
+    writeTextFileIfMissing(FS::PathCombine(instanceRoot, "README-AUTYZM.txt"),
+                           QStringLiteral("Autyzm.pl default modpack instance.\n"
+                                          "Minecraft: %1\n"
+                                          "NeoForge: %2\n"
+                                          "Server: %3\n"
+                                          "Client pack: %4\n")
+                               .arg(QString::fromLatin1(kMinecraftVersion), QString::fromLatin1(kNeoForgeVersion),
+                                    QString::fromLatin1(kServerAddress), QString::fromLatin1(kClientPackUrl)));
 
     if (APPLICATION->instances()) {
         APPLICATION->instances()->loadList();
@@ -310,4 +307,4 @@ void ensureDefaultInstance()
     downloadAndInstallClientPack(instanceRoot);
 }
 
-}
+}  // namespace AutyzmBootstrap

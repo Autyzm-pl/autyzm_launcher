@@ -4,4 +4,4 @@
 namespace AutyzmBootstrap {
 void applyFirstRunDefaults();
 void ensureDefaultInstance();
-}
+}  // namespace AutyzmBootstrap
