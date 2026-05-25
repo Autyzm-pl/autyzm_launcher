@@ -217,9 +217,9 @@ void ensureDefaultInstance()
 
     // Pre-launch command runs packwiz-installer-bootstrap which syncs mods from the server.
     // -g = no GUI, -s client = client-side only mods, URL = pack.toml location
-    // $INST_JAVA is expanded by the launcher to the Java executable path.
-    // Note: Don't use quotes around $INST_JAVA - the INI parser handles paths with spaces correctly.
-    const QString preLaunchCommand = QStringLiteral("$INST_JAVA -jar packwiz-installer-bootstrap.jar -g -s client %1")
+    // ${INST_JAVA} is expanded by the launcher to the Java executable path.
+    // Note: Use ${VAR} syntax - bare $VAR loses the trailing space when QSettings serializes to INI.
+    const QString preLaunchCommand = QStringLiteral("${INST_JAVA} -jar packwiz-installer-bootstrap.jar -g -s client %1")
                                          .arg(QString::fromLatin1(kPackwizPackUrl));
 
     // Always write instance.cfg to ensure PreLaunchCommand is set (even on existing instances)
