@@ -221,7 +221,9 @@ void ensureDefaultInstance()
     // Use ${VAR} syntax - bare $VAR loses the trailing space when QSettings serializes to INI.
     // Quotes around ${INST_JAVA} are required for paths with spaces (e.g. macOS "Application Support").
     // QProcess::splitCommand() respects quoted strings when splitting the command.
-    const QString preLaunchCommand = QStringLiteral("\"${INST_JAVA}\" -jar packwiz-installer-bootstrap.jar -g -s client %1")
+    // Backslash-escape the quotes so QSettings (INI parser) preserves them literally.
+    // Raw: \"${INST_JAVA}\" -jar ...  →  QSettings reads: "${INST_JAVA}" -jar ...
+    const QString preLaunchCommand = QStringLiteral("\\\"${INST_JAVA}\\\" -jar packwiz-installer-bootstrap.jar -g -s client %1")
                                          .arg(QString::fromLatin1(kPackwizPackUrl));
 
     // Always write instance.cfg to ensure PreLaunchCommand is set (even on existing instances)
