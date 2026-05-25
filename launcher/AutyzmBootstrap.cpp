@@ -5,7 +5,7 @@
 #include "Application.h"
 #include "BuildConfig.h"
 #include "InstanceList.h"
-#include "settings/INISettingsObject.h"
+#include "settings/INIFile.h"
 #include "ui/themes/ThemeManager.h"
 
 #include <FileSystem.h>
@@ -191,6 +191,34 @@ void applyFirstRunDefaults()
     }
 }
 
+QString defaultPreLaunchCommand()
+{
+    return QStringLiteral("\"${INST_JAVA}\" -jar packwiz-installer-bootstrap.jar -g -s client %1")
+        .arg(QString::fromLatin1(kPackwizPackUrl));
+}
+
+bool writeDefaultInstanceConfig(const QString& path)
+{
+    INIFile config;
+    config.set(QStringLiteral("ConfigVersion"), QStringLiteral("1.3"));
+    config.set(QStringLiteral("InstanceType"), QStringLiteral("OneSix"));
+    config.set(QStringLiteral("name"), QString::fromLatin1(kInstanceName));
+    config.set(QStringLiteral("iconKey"), QStringLiteral("grass"));
+    config.set(QStringLiteral("ManagedPack"), false);
+    config.set(QStringLiteral("OverrideCommands"), true);
+    config.set(QStringLiteral("PreLaunchCommand"), defaultPreLaunchCommand());
+    config.set(QStringLiteral("OverrideJava"), true);
+    config.set(QStringLiteral("OverrideMemory"), true);
+    config.set(QStringLiteral("MinMemAlloc"), 1024);
+    config.set(QStringLiteral("MaxMemAlloc"), 8192);
+
+    if (!config.saveFile(path)) {
+        qWarning() << "Autyzm bootstrap: cannot write" << path;
+        return false;
+    }
+    return true;
+}
+
 void ensureDefaultInstance()
 {
     auto settings = APPLICATION->settings();
@@ -215,31 +243,10 @@ void ensureDefaultInstance()
         qInfo() << "Autyzm bootstrap: creating default instance at" << instanceRoot;
     }
 
-    // Pre-launch command runs packwiz-installer-bootstrap which syncs mods from the server.
-    // -g = no GUI, -s client = client-side only mods, URL = pack.toml location
-    // ${INST_JAVA} is expanded by the launcher to the Java executable path.
-    // Use ${VAR} syntax - bare $VAR loses the trailing space when QSettings serializes to INI.
-    // Quotes around ${INST_JAVA} are required for paths with spaces (e.g. macOS "Application Support").
-    // QProcess::splitCommand() respects quoted strings when splitting the command.
-    // Backslash-escape the quotes so QSettings (INI parser) preserves them literally.
-    // Raw: \"${INST_JAVA}\" -jar ...  →  QSettings reads: "${INST_JAVA}" -jar ...
-    const QString preLaunchCommand = QStringLiteral("\\\"${INST_JAVA}\\\" -jar packwiz-installer-bootstrap.jar -g -s client %1")
-                                         .arg(QString::fromLatin1(kPackwizPackUrl));
-
-    // Always write instance.cfg to ensure PreLaunchCommand is set (even on existing instances)
-    writeTextFile(FS::PathCombine(instanceRoot, "instance.cfg"),
-                  QStringLiteral("ConfigVersion=1.3\n"
-                                 "InstanceType=OneSix\n"
-                                 "name=%1\n"
-                                 "iconKey=grass\n"
-                                 "ManagedPack=false\n"
-                                 "OverrideCommands=true\n"
-                                 "PreLaunchCommand=%2\n"
-                                 "OverrideJava=true\n"
-                                 "OverrideMemory=true\n"
-                                 "MinMemAlloc=1024\n"
-                                 "MaxMemAlloc=8192\n")
-                      .arg(QString::fromLatin1(kInstanceName), preLaunchCommand));
+    // Always write instance.cfg to ensure PreLaunchCommand is set, even on existing instances.
+    // The file must go through INIFile/QSettings: raw INI quotes are parsed specially and
+    // can turn `"${INST_JAVA}" -jar` into `${INST_JAVA}-jar` on load.
+    writeDefaultInstanceConfig(FS::PathCombine(instanceRoot, "instance.cfg"));
 
     writeTextFileIfMissing(FS::PathCombine(instanceRoot, "mmc-pack.json"),
                            QStringLiteral("{\n"
