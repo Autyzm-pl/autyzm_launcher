@@ -203,7 +203,7 @@ bool writeDefaultInstanceConfig(const QString& path)
     config.set(QStringLiteral("ConfigVersion"), QStringLiteral("1.3"));
     config.set(QStringLiteral("InstanceType"), QStringLiteral("OneSix"));
     config.set(QStringLiteral("name"), QString::fromLatin1(kInstanceName));
-    config.set(QStringLiteral("iconKey"), QStringLiteral("grass"));
+    config.set(QStringLiteral("iconKey"), QStringLiteral("pullappMC"));
     config.set(QStringLiteral("ManagedPack"), false);
     config.set(QStringLiteral("OverrideCommands"), true);
     config.set(QStringLiteral("PreLaunchCommand"), defaultPreLaunchCommand());
