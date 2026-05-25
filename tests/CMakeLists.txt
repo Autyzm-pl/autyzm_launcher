@@ -1,5 +1,8 @@
 project(tests)
 
+ecm_add_test(PreLaunchCommand_test.cpp LINK_LIBRARIES Qt${QT_VERSION_MAJOR}::Test
+    TEST_NAME PreLaunchCommand)
+
 ecm_add_test(FileSystem_test.cpp LINK_LIBRARIES Launcher_logic Qt${QT_VERSION_MAJOR}::Test
     TEST_NAME FileSystem)
 
